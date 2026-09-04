@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/binary"
 	"fmt"
 	"os"
 	"strings"
@@ -22,14 +23,30 @@ func main() {
 	// https://www.the-roberts-family.net/metadata/mp3.html
 	datString := string(dat)
 	// find USLT tag
-	usltStart := strings.Index(datString, "USLT")
-	if usltStart == -1 {
+	cursor := strings.Index(datString, "USLT")
+	if cursor == -1 {
 		panic("lyrics tag not found")
 	}
 
-	fmt.Printf("% +q \n", datString[usltStart:usltStart+50])
-	fmt.Print(datString[usltStart + 10 : usltStart+3286+10])
+	frameTagBytes := dat[cursor : cursor+4]
+	cursor += 4
+	contentSizeBytes := dat[cursor : cursor+4]
+	contentSize := binary.BigEndian.Uint32(contentSizeBytes)
+	cursor += 4
+	flagsBytes := dat[cursor : cursor+2]
+	cursor += 2
+	langBytes := dat[cursor : cursor+4]
+	cursor += 4
+	mystery := dat[cursor : cursor+6]
+	cursor += 6
+	lyricsBytes := dat[cursor : cursor+int(contentSize-10)]
 
+	fmt.Println(string(frameTagBytes))
+	fmt.Println(contentSize)
+	fmt.Println(flagsBytes)
+	fmt.Println(string(langBytes))
+	fmt.Println(mystery)
+	fmt.Println(string(lyricsBytes))
 }
 
 func check(err error) {
