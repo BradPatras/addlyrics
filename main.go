@@ -74,7 +74,7 @@ func main() {
 	fmt.Println(flagsBytes)
 	fmt.Println(encodingByte)
 	fmt.Println(string(langBytes))
-	fmt.Println(string(contentDesc))
+	fmt.Println(decodeUtf16String(contentDesc))
 	fmt.Println(decodeUtf16String(lyricsBytes))
 }
 
