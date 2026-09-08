@@ -15,28 +15,32 @@ type lyricsframe struct {
 }
 
 func main() {
-	println("hello world")
+	fmt.Println(getLyricsFromFile("test.mp3"))
+}
 
-	dat, err := os.ReadFile("test.mp3")
+func getLyricsFromFile(fp string) string {
+	dat, err := os.ReadFile(fp)
 	check(err)
 
 	// for now assume ID3v2.3
 	// https://www.thebroadcastbridge.com/content/entry/21824/standards-id3-metadata-tagging
 	// https://www.the-roberts-family.net/metadata/mp3.html
 	datString := string(dat)
+
 	// find USLT tag
 	cursor := strings.Index(datString, "USLT")
 	if cursor == -1 {
 		panic("lyrics tag not found")
 	}
 
-	frameTagBytes := dat[cursor : cursor+4]
+	// skip over frame id
 	cursor += 4
+
+	// get content size
 	contentSizeBytes := dat[cursor : cursor+4]
 	contentSize := binary.BigEndian.Uint32(contentSizeBytes)
-	cursor += 4
-	flagsBytes := dat[cursor : cursor+2]
-	cursor += 2
+	// advance past content size (4 bytes) and flags bytes (2 bytes)
+	cursor += 6
 
 	// encoding byte determines the size of characters (00 = 1 byte, 01 = 2 bytes)
 	encodingByte := dat[cursor]
@@ -46,10 +50,8 @@ func main() {
 	} else {
 		terminatorSize = 1
 	}
-	cursor += 1
-
-	langBytes := dat[cursor : cursor+3]
-	cursor += 3
+	// skip over encoding byte and language bytes
+	cursor += 4
 
 	// scan over the variable length content descriptor
 	var terminated bool
@@ -67,15 +69,13 @@ func main() {
 	}
 
 	contentDescSize := cursor - contentDescStart
-	contentDesc := dat[contentDescStart:cursor]
 	lyricsBytes := dat[cursor : cursor+int(contentSize-uint32(contentDescSize+3+1))]
-	fmt.Println(string(frameTagBytes))
-	fmt.Println(contentSize)
-	fmt.Println(flagsBytes)
-	fmt.Println(encodingByte)
-	fmt.Println(string(langBytes))
-	fmt.Println(decodeUtf16String(contentDesc))
-	fmt.Println(decodeUtf16String(lyricsBytes))
+
+	if terminatorSize == 2 {
+		return bytesToUtf16String(lyricsBytes)
+	} else {
+		return string(lyricsBytes)
+	}
 }
 
 func check(err error) {
@@ -89,8 +89,8 @@ func printLyricsFrame(l lyricsframe) {
 }
 
 // decode a byte array into a utf16 string
-func decodeUtf16String(bytes []byte) string {
-	// default to little endian
+func bytesToUtf16String(bytes []byte) string {
+	// default to big endian = false (little endian)
 	var isBigEndian bool
 
 	// check for BOM
