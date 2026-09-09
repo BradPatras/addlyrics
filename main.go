@@ -15,10 +15,10 @@ type lyricsframe struct {
 }
 
 func main() {
-	fmt.Println(getLyricsFromFile("test.mp3"))
+	fmt.Println(readLyricsFromFile("test.mp3"))
 }
 
-func getLyricsFromFile(fp string) string {
+func readLyricsFromFile(fp string) string {
 	dat, err := os.ReadFile(fp)
 	check(err)
 
@@ -78,14 +78,46 @@ func getLyricsFromFile(fp string) string {
 	}
 }
 
+func writeLyricsToFile(lyrics string, fp string) {
+	dat, err := os.ReadFile(fp)
+	check(err)
+
+	// only support ID3v2.3
+	id3Tag := []byte{0x49, 0x44, 0x33, 0x03}
+
+	// verify file already has ID3 block
+	if !slices.Equal(dat[0:5], id3Tag) {
+		panic("Unsupported: file does not contain ID3v2.3 data")
+	}
+
+}
+
+// this is wild, thanks https://stackoverflow.com/a/5652842/4038809
+func syncsafeToInt(bytes [4]byte) uint32 {
+	byte0 := uint32(bytes[0])
+	byte1 := uint32(bytes[1])
+	byte2 := uint32(bytes[2])
+	byte3 := uint32(bytes[3])
+
+	return byte0<<21 | byte1<<14 | byte2<<7 | byte3
+}
+
+func intToSyncsafe(i uint32) [4]byte {
+	// I'm going to immediately forget how this works, so:
+	// move the bits that'll represent the desired byte down to the least-significant 7 bits
+	// then the '& 0x7f' bitmask takes only those 7 bytes cause 0x7f == 01111111
+	return [4]byte{
+		byte((i >> 21) & 0x7F),
+		byte((i >> 14) & 0x7F),
+		byte((i >> 7) & 0x7F),
+		byte(i & 0x7F),
+	}
+}
+
 func check(err error) {
 	if err != nil {
 		panic(err)
 	}
-}
-
-func printLyricsFrame(l lyricsframe) {
-	fmt.Printf("language: %s\n, lyrics text: %s", l.language, l.text)
 }
 
 // decode a byte array into a utf16 string
