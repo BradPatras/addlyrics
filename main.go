@@ -1,7 +1,9 @@
 package main
 
 import (
+	"bytes"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"os"
 	"slices"
@@ -9,18 +11,41 @@ import (
 	"unicode/utf16"
 )
 
+type InvalidID3Error struct{}
+
+func (e *InvalidID3Error) Error() string {
+	return "Invalid: file does not contain valid ID3v2.3 metadata"
+}
+
+type NoLyricsTagError struct{}
+
+func (e *NoLyricsTagError) Error() string {
+	return "Missing lyrics: USLT tag not found"
+}
+
+// var myErr *MyError
+// if errors.As(err, &myErr) {
+//     if myErr.Code == 42 {
+//         // Handle the error
+//     }
+// }
+
 type lyricsframe struct {
 	language string
 	text     string
 }
 
 func main() {
-	fmt.Println(readLyricsFromFile("test.mp3"))
+	// fmt.Println(readLyricsFromFile("test.mp3"))
+	writeLyricsToFile("", "test2.mp3")
 }
 
-func readLyricsFromFile(fp string) string {
+func readLyricsFromFile(fp string) (string, error) {
 	dat, err := os.ReadFile(fp)
-	check(err)
+
+	if err != nil {
+		return "", err
+	}
 
 	// for now assume ID3v2.3
 	// https://www.thebroadcastbridge.com/content/entry/21824/standards-id3-metadata-tagging
@@ -30,7 +55,7 @@ func readLyricsFromFile(fp string) string {
 	// find USLT tag
 	cursor := strings.Index(datString, "USLT")
 	if cursor == -1 {
-		panic("lyrics tag not found")
+		return "", &NoLyricsTagError{}
 	}
 
 	// skip over frame id
@@ -72,24 +97,65 @@ func readLyricsFromFile(fp string) string {
 	lyricsBytes := dat[cursor : cursor+int(contentSize-uint32(contentDescSize+3+1))]
 
 	if terminatorSize == 2 {
-		return bytesToUtf16String(lyricsBytes)
+		return bytesToString(lyricsBytes), nil
 	} else {
-		return string(lyricsBytes)
+		return string(lyricsBytes), nil
 	}
 }
 
-func writeLyricsToFile(lyrics string, fp string) {
+func writeLyricsToFile(lyrics string, fp string) error {
 	dat, err := os.ReadFile(fp)
-	check(err)
 
-	// only support ID3v2.3
-	id3Tag := []byte{0x49, 0x44, 0x33, 0x03}
-
-	// verify file already has ID3 block
-	if !slices.Equal(dat[0:5], id3Tag) {
-		panic("Unsupported: file does not contain ID3v2.3 data")
+	if err != nil {
+		return err
 	}
 
+	// verify file has ID3v2.3 block
+	id3Tag := [4]byte{0x49, 0x44, 0x33, 0x03}
+	if [4]byte(dat[0:5]) != id3Tag {
+		return &InvalidID3Error{}
+	}
+
+	// get current ID3 size
+	// the size is the last 4 bytes of the 10 byte header
+	// size bytes use the special 'syncsafe' format
+	id3Size := syncsafeToInt([4]byte(dat[6:10]))
+	fmt.Println(id3Size)
+
+	// check for existing lyrics tag, bail if found - I'll implement proper handling of this case later
+	_, readLyricsErr := readLyricsFromFile(fp)
+	if _, ok := errors.AsType[*NoLyricsTagError](readLyricsErr); !ok {
+		panic("Lyrics metadata already present, overwriting not yet supported")
+	}
+
+	// create the lyrics frame
+
+	// insert the lyrics frame at the end of the ID3 block
+
+	// update the ID3 size value to reflect the added lyrics frame
+
+	return nil
+}
+
+func createLyricsFrame(lyrics string, language string) ([]byte, error) {
+	bytes := []byte{0x55, 0x53, 0x4C, 0x54}
+
+	// lyricsBytes := stringToBytes(lyrics)
+	// frameContentSize := 8 +
+	bytes = append(bytes)
+
+	return bytes, nil
+}
+
+// Convert uint32 to bytes
+func intToBytes(i uint32) ([]byte, error) {
+	buff := new(bytes.Buffer)
+	err := binary.Write(buff, binary.BigEndian, i)
+	if err != nil {
+		return []byte{}, err
+	}
+
+	return buff.Bytes(), nil
 }
 
 // this is wild, thanks https://stackoverflow.com/a/5652842/4038809
@@ -121,7 +187,7 @@ func check(err error) {
 }
 
 // decode a byte array into a utf16 string
-func bytesToUtf16String(bytes []byte) string {
+func bytesToString(bytes []byte) string {
 	// default to big endian = false (little endian)
 	var isBigEndian bool
 
@@ -135,17 +201,29 @@ func bytesToUtf16String(bytes []byte) string {
 	}
 
 	// interpret the bytes as uint16s
-	uints := make([]uint16, len(bytes))
+	uints := make([]uint16, len(bytes)/2)
 
-	for i := 0; i < len(uints); i += 2 {
+	for i := 0; i < len(bytes); i += 2 {
 		if isBigEndian {
-			uints[i] = binary.BigEndian.Uint16(bytes[i : i+2])
+			uints[i/2] = binary.BigEndian.Uint16(bytes[i : i+2])
 		} else {
-			uints[i] = binary.LittleEndian.Uint16(bytes[i : i+2])
+			uints[i/2] = binary.LittleEndian.Uint16(bytes[i : i+2])
 		}
 	}
 
 	return string(utf16.Decode(uints))
+}
+
+// convert a string to bytes in utf16 format
+func stringToBytes(s string) (bytes []byte) {
+	// add little endian byte order marker
+	bytes = append(bytes, 0xFF, 0xFE)
+	encoded := utf16.Encode([]rune(s))
+	for i := range len(encoded) {
+		bytes = binary.LittleEndian.AppendUint16(bytes, encoded[i])
+	}
+
+	return bytes
 }
 
 /*

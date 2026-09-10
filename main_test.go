@@ -1,6 +1,7 @@
 package main
 
 import (
+	"slices"
 	"testing"
 )
 
@@ -19,5 +20,23 @@ func TestIntToSyncsafe(t *testing.T) {
 	converted := intToSyncsafe(integer)
 	if bytes != converted {
 		t.Errorf(`intToSyncsafe(77198) = %d, want "%d", error`, converted, bytes)
+	}
+}
+
+func TestStringToBytes(t *testing.T) {
+	// "Imagination" in utf16 bytes
+	bytes := []byte{0xFF, 0xFE, 0x49, 0x00, 0x6D, 0x00, 0x61, 0x00, 0x67, 0x00, 0x69, 0x00, 0x6E, 0x00, 0x61, 0x00, 0x74, 0x00, 0x69, 0x00, 0x6F, 0x00, 0x6E, 0x00}
+	converted := bytesToString(bytes)
+	expected := "Imagination"
+	if converted != expected {
+		t.Errorf(`bytesToString(...) = "%s", want "%s"`, converted, expected)
+	}
+}
+
+func TestBytesToString(t *testing.T) {
+	converted := stringToBytes("Imagination")
+	expected := []byte{0xFF, 0xFE, 0x49, 0x00, 0x6D, 0x00, 0x61, 0x00, 0x67, 0x00, 0x69, 0x00, 0x6E, 0x00, 0x61, 0x00, 0x74, 0x00, 0x69, 0x00, 0x6F, 0x00, 0x6E, 0x00}
+	if !slices.Equal(converted, expected) {
+		t.Errorf(`stringToBytes("Imagination") = "%s", want "%s"`, converted, expected)
 	}
 }
