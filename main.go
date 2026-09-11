@@ -138,13 +138,32 @@ func writeLyricsToFile(lyrics string, fp string) error {
 }
 
 func createLyricsFrame(lyrics string, language string) ([]byte, error) {
-	bytes := []byte{0x55, 0x53, 0x4C, 0x54}
+	// build content
+	contentBytes := []byte{
+		0x01, // UTF16 flag
+	}
+	// 3 byte language code
+	contentBytes = append(contentBytes, []byte(language)...)
+	// empty content description (blank utf16 string)
+	contentBytes = append(contentBytes, 0xFF, 0xFE, 0x00, 0x00)
+	// lyrics
+	contentBytes = append(contentBytes, stringToBytes(lyrics)...)
+	// terminator bytes
+	contentBytes = append(contentBytes, 0x00, 0x00)
 
-	// lyricsBytes := stringToBytes(lyrics)
-	// frameContentSize := 8 +
-	bytes = append(bytes)
+	contentLengthBytes, err := intToBytes(uint32(len(contentBytes)))
+	if err != nil {
+		return []byte{}, err
+	}
 
-	return bytes, nil
+	// USLT
+	headerBytes := []byte{0x55, 0x53, 0x4C, 0x54}
+	// content size (4 bytes)
+	headerBytes = append(headerBytes, contentLengthBytes...)
+	// flags (2 bytes)
+	headerBytes = append(headerBytes, 0x00, 0x00)
+
+	return append(headerBytes, contentBytes...), nil
 }
 
 // Convert uint32 to bytes

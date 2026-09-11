@@ -40,3 +40,19 @@ func TestBytesToString(t *testing.T) {
 		t.Errorf(`stringToBytes("Imagination") = "%s", want "%s"`, converted, expected)
 	}
 }
+
+func TestCreateLyricsFrame(t *testing.T) {
+	expected := []byte{
+		0x55, 0x53, 0x4C, 0x54, // USLT
+		0x00, 0x00, 0x00, 0x14, // Content length uint32
+		0x00, 0x00, // flags
+		0x01,             // utf16
+		0x65, 0x6E, 0x67, // language (eng)
+		0xFF, 0xFE, 0x00, 0x00, // empty content desc
+		0xFF, 0xFE, 0x4C, 0x00, 0x6F, 0x00, 0x6F, 0x00, 0x6B, 0x00, 0x00, 0x00, // lyrics ("Look")
+	}
+	actual, err := createLyricsFrame("Look", "eng")
+	if err != nil || !slices.Equal(expected, actual) {
+		t.Errorf(`createLyricsFrame("Look", "eng") = "%s", want "%s"`, actual, expected)
+	}
+}
