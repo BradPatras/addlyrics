@@ -23,6 +23,12 @@ func (e *NoLyricsTagError) Error() string {
 	return "Missing lyrics: USLT tag not found"
 }
 
+type ExistingLyricsTagError struct{}
+
+func (e *ExistingLyricsTagError) Error() string {
+	return "Existing lyrics: Overwriting not supported"
+}
+
 // var myErr *MyError
 // if errors.As(err, &myErr) {
 //     if myErr.Code == 42 {
@@ -40,13 +46,7 @@ func main() {
 	writeLyricsToFile("Magenta", "test2.mp3", "out.mp3")
 }
 
-func readLyricsFromFile(fp string) (string, error) {
-	dat, err := os.ReadFile(fp)
-
-	if err != nil {
-		return "", err
-	}
-
+func getLyricsFromID3Data(dat []byte) (string, error) {
 	// for now assume ID3v2.3
 	// https://www.thebroadcastbridge.com/content/entry/21824/standards-id3-metadata-tagging
 	// https://www.the-roberts-family.net/metadata/mp3.html
@@ -103,6 +103,16 @@ func readLyricsFromFile(fp string) (string, error) {
 	}
 }
 
+func readLyricsFromFile(fp string) (string, error) {
+	dat, err := os.ReadFile(fp)
+
+	if err != nil {
+		return "", err
+	}
+
+	return getLyricsFromID3Data(dat)
+}
+
 func writeLyricsToFile(lyrics string, inputfp string, outputfp string) error {
 	dat, err := os.ReadFile(inputfp)
 
@@ -110,39 +120,48 @@ func writeLyricsToFile(lyrics string, inputfp string, outputfp string) error {
 		return err
 	}
 
+	dat, err = addLyricsToID3Data(lyrics, "eng", dat)
+
+	if err != nil {
+		return err
+	}
+
+	return os.WriteFile(outputfp, dat, 0666)
+}
+
+func addLyricsToID3Data(lyrics string, language string, data []byte) ([]byte, error) {
 	// verify file has ID3v2.3 block
 	id3Tag := [4]byte{0x49, 0x44, 0x33, 0x03}
-	if [4]byte(dat[0:5]) != id3Tag {
-		return &InvalidID3Error{}
+	if [4]byte(data[0:5]) != id3Tag {
+		return []byte{}, &InvalidID3Error{}
 	}
 
 	// get current ID3 size
 	// the size is the last 4 bytes of the 10 byte header
 	// size bytes use the special 'syncsafe' format
-	id3Size := syncsafeToInt([4]byte(dat[6:10]))
-	fmt.Printf("start size: %d\n", id3Size)
+	id3Size := syncsafeToInt([4]byte(data[6:10]))
 
 	// check for existing lyrics tag, bail if found - I'll implement proper handling of this case later
-	_, readLyricsErr := readLyricsFromFile(inputfp)
+	_, readLyricsErr := getLyricsFromID3Data(data)
 	if _, ok := errors.AsType[*NoLyricsTagError](readLyricsErr); !ok {
-		panic("Lyrics metadata already present, overwriting not yet supported")
+		panic("Lyrics metadataa already present, overwriting not yet supported")
 	}
 
 	// create the lyrics frame
-	lyricsFrame, err := createLyricsFrame(lyrics, "eng")
+	lyricsFrame, err := createLyricsFrame(lyrics, language)
 	if err != nil {
-		return err
+		return []byte{}, err
 	}
 
 	// insert the lyrics frame at the end of the ID3 block
-	dat = slices.Insert(dat, 10, lyricsFrame...)
+	data = slices.Insert(data, 10, lyricsFrame...)
 
 	// update the ID3 size value to include the added lyrics frame
 	newSize := uint32(int(id3Size) + len(lyricsFrame))
 	newSizeBytes := intToSyncsafe(newSize)
-	dat = slices.Replace(dat, 6, 10, newSizeBytes[:]...)
-	fmt.Printf("new size: %d\n", newSize)
-	return os.WriteFile(outputfp, dat, 0666)
+	data = slices.Replace(data, 6, 10, newSizeBytes[:]...)
+
+	return data, nil
 }
 
 func createLyricsFrame(lyrics string, language string) ([]byte, error) {
