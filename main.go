@@ -37,7 +37,7 @@ type lyricsframe struct {
 
 func main() {
 	// fmt.Println(readLyricsFromFile("test.mp3"))
-	writeLyricsToFile("", "test2.mp3")
+	writeLyricsToFile("Magenta", "test2.mp3", "out.mp3")
 }
 
 func readLyricsFromFile(fp string) (string, error) {
@@ -103,8 +103,8 @@ func readLyricsFromFile(fp string) (string, error) {
 	}
 }
 
-func writeLyricsToFile(lyrics string, fp string) error {
-	dat, err := os.ReadFile(fp)
+func writeLyricsToFile(lyrics string, inputfp string, outputfp string) error {
+	dat, err := os.ReadFile(inputfp)
 
 	if err != nil {
 		return err
@@ -120,28 +120,35 @@ func writeLyricsToFile(lyrics string, fp string) error {
 	// the size is the last 4 bytes of the 10 byte header
 	// size bytes use the special 'syncsafe' format
 	id3Size := syncsafeToInt([4]byte(dat[6:10]))
-	fmt.Println(id3Size)
+	fmt.Printf("start size: %d\n", id3Size)
 
 	// check for existing lyrics tag, bail if found - I'll implement proper handling of this case later
-	_, readLyricsErr := readLyricsFromFile(fp)
+	_, readLyricsErr := readLyricsFromFile(inputfp)
 	if _, ok := errors.AsType[*NoLyricsTagError](readLyricsErr); !ok {
 		panic("Lyrics metadata already present, overwriting not yet supported")
 	}
 
 	// create the lyrics frame
+	lyricsFrame, err := createLyricsFrame(lyrics, "eng")
+	if err != nil {
+		return err
+	}
 
 	// insert the lyrics frame at the end of the ID3 block
+	dat = slices.Insert(dat, 10, lyricsFrame...)
 
-	// update the ID3 size value to reflect the added lyrics frame
-
-	return nil
+	// update the ID3 size value to include the added lyrics frame
+	newSize := uint32(int(id3Size) + len(lyricsFrame))
+	newSizeBytes := intToSyncsafe(newSize)
+	dat = slices.Replace(dat, 6, 10, newSizeBytes[:]...)
+	fmt.Printf("new size: %d\n", newSize)
+	return os.WriteFile(outputfp, dat, 0666)
 }
 
 func createLyricsFrame(lyrics string, language string) ([]byte, error) {
-	// build content
-	contentBytes := []byte{
-		0x01, // UTF16 flag
-	}
+	// build frame content
+	// UTF16 flag
+	contentBytes := []byte{0x01}
 	// 3 byte language code
 	contentBytes = append(contentBytes, []byte(language)...)
 	// empty content description (blank utf16 string)
@@ -151,14 +158,14 @@ func createLyricsFrame(lyrics string, language string) ([]byte, error) {
 	// terminator bytes
 	contentBytes = append(contentBytes, 0x00, 0x00)
 
+	// build frame header
+	// USLT
+	headerBytes := []byte{0x55, 0x53, 0x4C, 0x54}
+	// content size (4 bytes)
 	contentLengthBytes, err := intToBytes(uint32(len(contentBytes)))
 	if err != nil {
 		return []byte{}, err
 	}
-
-	// USLT
-	headerBytes := []byte{0x55, 0x53, 0x4C, 0x54}
-	// content size (4 bytes)
 	headerBytes = append(headerBytes, contentLengthBytes...)
 	// flags (2 bytes)
 	headerBytes = append(headerBytes, 0x00, 0x00)
