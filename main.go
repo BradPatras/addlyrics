@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/binary"
 	"errors"
-	"fmt"
 	"os"
 	"slices"
 	"strings"
@@ -35,11 +34,6 @@ func (e *ExistingLyricsTagError) Error() string {
 //         // Handle the error
 //     }
 // }
-
-type lyricsframe struct {
-	language string
-	text     string
-}
 
 func main() {
 	// fmt.Println(readLyricsFromFile("test.mp3"))
@@ -270,20 +264,3 @@ func stringToBytes(s string) (bytes []byte) {
 
 	return bytes
 }
-
-/*
-from the mutagen python project:
-class USLT(Frame):
-    """Unsynchronised lyrics/text transcription.
-
-    Lyrics have a three letter ISO language code ('lang'), a
-    description ('desc'), and a block of plain text ('text').
-    """
-
-    _framespec = [
-        EncodingSpec('encoding', default=Encoding.UTF16),
-        StringSpec('lang', length=3, default=u"XXX"),
-        EncodedTextSpec('desc'),
-        EncodedTextSpec('text'),
-    ]
-*/
