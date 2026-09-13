@@ -4,10 +4,13 @@ import (
 	"bytes"
 	"encoding/binary"
 	"errors"
+	"io"
 	"os"
 	"slices"
 	"strings"
 	"unicode/utf16"
+
+	"github.com/tcolgate/mp3"
 )
 
 type InvalidID3Error struct{}
@@ -37,7 +40,7 @@ func (e *ExistingLyricsTagError) Error() string {
 
 func main() {
 	// fmt.Println(readLyricsFromFile("test.mp3"))
-	writeLyricsToFile("Magenta", "test2.mp3", "out.mp3")
+	writeLyricsToFile("Hello, world!", "test/hello-world.mp3", "out.mp3")
 }
 
 func getLyricsFromID3Data(dat []byte) (string, error) {
@@ -217,6 +220,32 @@ func intToSyncsafe(i uint32) [4]byte {
 		byte((i >> 7) & 0x7F),
 		byte(i & 0x7F),
 	}
+}
+
+// thanks https://stackoverflow.com/a/60294163/4038809
+func getMp3Len(fp string) (int64, error) {
+	var t int64
+	r, err := os.Open(fp)
+	if err != nil {
+		return 0, err
+	}
+
+	d := mp3.NewDecoder(r)
+	var f mp3.Frame
+	skipped := 0
+
+	for {
+		if err := d.Decode(&f, &skipped); err != nil {
+			if err == io.EOF {
+				break
+			}
+			return 0, err
+		}
+
+		t = t + f.Duration().Milliseconds()
+	}
+
+	return t, nil
 }
 
 func check(err error) {

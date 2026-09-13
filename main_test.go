@@ -56,3 +56,14 @@ func TestCreateLyricsFrame(t *testing.T) {
 		t.Errorf(`createLyricsFrame("Look", "eng") = "%s", want "%s"`, actual, expected)
 	}
 }
+
+func TestMp3Len(t *testing.T) {
+	expected := int64(3536)
+	actual, err := getMp3Len("test/hello-world.mp3")
+
+	if err != nil {
+		t.Errorf(`getMp3Len() error: %s"`, err.Error())
+	} else if expected != actual {
+		t.Errorf(`getMp3Len() = "%d", want "%d"`, actual, expected)
+	}
+}
