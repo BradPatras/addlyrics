@@ -3,8 +3,12 @@ package main
 import (
 	"bytes"
 	"encoding/binary"
+	"encoding/json/v2"
 	"errors"
+	"fmt"
 	"io"
+	"net/http"
+	"net/url"
 	"os"
 	"slices"
 	"strings"
@@ -189,6 +193,39 @@ func createLyricsFrame(lyrics string, language string) ([]byte, error) {
 	return append(headerBytes, contentBytes...), nil
 }
 
+func fetchLyrics(title string, artist string, album string, duration int64) (string, error) {
+	endpoint := fmt.Sprintf("https://lrclib.net/api/get?track_name=%s&artist_name=%s&album_name=%s&duration=%d", url.QueryEscape(title), url.QueryEscape(artist), url.QueryEscape(album), duration)
+	client := &http.Client{}
+
+	req, err := http.NewRequest("GET", endpoint, nil)
+	if err != nil {
+		return "", err
+	}
+
+	req.Header.Set("User-Agent", "addlyrics (github.com/BradPatras/addlyrics)")
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", err
+	}
+
+	defer resp.Body.Close()
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", err
+	}
+
+	var response any
+	err = json.Unmarshal(body, &response)
+	if err != nil {
+		return "", err
+	}
+
+	responseMap := response.(map[string]any)
+
+	return responseMap["plainLyrics"].(string), nil
+}
+
 // Convert uint32 to bytes
 func intToBytes(i uint32) ([]byte, error) {
 	buff := new(bytes.Buffer)
@@ -245,7 +282,7 @@ func getMp3Len(fp string) (int64, error) {
 		t = t + f.Duration().Milliseconds()
 	}
 
-	return t, nil
+	return t / 1000, nil
 }
 
 func check(err error) {

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"slices"
 	"testing"
 )
@@ -58,7 +59,7 @@ func TestCreateLyricsFrame(t *testing.T) {
 }
 
 func TestMp3Len(t *testing.T) {
-	expected := int64(3536)
+	expected := int64(3)
 	actual, err := getMp3Len("test/hello-world.mp3")
 
 	if err != nil {
@@ -66,4 +67,16 @@ func TestMp3Len(t *testing.T) {
 	} else if expected != actual {
 		t.Errorf(`getMp3Len() = "%d", want "%d"`, actual, expected)
 	}
+}
+
+func TestFetchLyrics(t *testing.T) {
+	// GET /api/get?artist_name=Borislav+Slavov&track_name=I+Want+to+Live&album_name=Baldur%27s+Gate+3+(Original+Game+Soundtrack)&duration=233
+
+	l, err := fetchLyrics("I Want to Live", "Borislav Slavov", "Baldur's Gate 3 (Original Game Soundtrack)", 233)
+
+	if err != nil {
+		fmt.Print(err.Error())
+	}
+	fmt.Println(l)
+
 }
