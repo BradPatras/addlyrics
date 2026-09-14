@@ -29,6 +29,26 @@ func (e *NoLyricsTagError) Error() string {
 	return "Missing lyrics: USLT tag not found"
 }
 
+type NoTitleTagError struct{}
+
+func (e *NoTitleTagError) Error() string {
+	return "Missing title: TIT2 tag not found"
+}
+
+type NoArtistTagError struct{}
+
+func (e *NoArtistTagError) Error() string {
+	return "Missing artist: TPE1/TPE2 tag not found"
+}
+
+type TextFrameNotFoundError struct {
+	frameId string
+}
+
+func (e *TextFrameNotFoundError) Error() string {
+	return fmt.Sprintf("Missing data frame: %s", e.frameId)
+}
+
 type ExistingLyricsTagError struct{}
 
 func (e *ExistingLyricsTagError) Error() string {
@@ -47,7 +67,7 @@ func main() {
 	writeLyricsToFile("Hello, world!", "test/hello-world.mp3", "out.mp3")
 }
 
-func getLyricsFromID3Data(dat []byte) (string, error) {
+func getId3Lyrics(dat []byte) (string, error) {
 	// for now assume ID3v2.3
 	// https://www.thebroadcastbridge.com/content/entry/21824/standards-id3-metadata-tagging
 	// https://www.the-roberts-family.net/metadata/mp3.html
@@ -104,6 +124,64 @@ func getLyricsFromID3Data(dat []byte) (string, error) {
 	}
 }
 
+func getTextFrameValue(dat []byte, id string) (string, error) {
+	datString := string(dat)
+
+	// find tag
+	cursor := strings.Index(datString, id)
+	if cursor == -1 {
+		return "", &TextFrameNotFoundError{id}
+	}
+
+	// skip over frame id
+	cursor += 4
+
+	// get content size
+	contentSizeBytes := dat[cursor : cursor+4]
+	contentSize := binary.BigEndian.Uint32(contentSizeBytes)
+	// advance past content size (4 bytes) and flags bytes (2 bytes)
+	cursor += 6
+
+	// encoding byte determines the size of characters (00 = 1 byte, 01 = 2 bytes)
+	encodingByte := dat[cursor]
+	var terminatorSize int
+	if encodingByte == 0x01 {
+		terminatorSize = 2
+	} else {
+		terminatorSize = 1
+	}
+	// skip over encoding byte
+	cursor += 1
+
+	contentBytes := dat[cursor : cursor+int(contentSize-1)]
+
+	if terminatorSize == 2 {
+		return bytesToString(contentBytes), nil
+	} else {
+		return string(contentBytes), nil
+	}
+}
+
+func getId3Artist(dat []byte) (string, error) {
+	// read TPE2 (TPE1 as fallback?)
+	tpe2, err := getTextFrameValue(dat, "TPE2")
+
+	if err != nil || len(tpe2) == 0 {
+		return getTextFrameValue(dat, "TPE1")
+	} else {
+		return tpe2, nil
+	}
+}
+
+func getId3Album(dat []byte) (string, error) {
+	// read TALB frame
+	return getTextFrameValue(dat, "TALB")
+}
+
+func getId3Title(dat []byte) (string, error) {
+	return getTextFrameValue(dat, "TIT2")
+}
+
 func readLyricsFromFile(fp string) (string, error) {
 	dat, err := os.ReadFile(fp)
 
@@ -111,7 +189,7 @@ func readLyricsFromFile(fp string) (string, error) {
 		return "", err
 	}
 
-	return getLyricsFromID3Data(dat)
+	return getId3Lyrics(dat)
 }
 
 func writeLyricsToFile(lyrics string, inputfp string, outputfp string) error {
@@ -143,7 +221,7 @@ func addLyricsToID3Data(lyrics string, language string, data []byte) ([]byte, er
 	id3Size := syncsafeToInt([4]byte(data[6:10]))
 
 	// check for existing lyrics tag, bail if found - I'll implement proper handling of this case later
-	_, readLyricsErr := getLyricsFromID3Data(data)
+	_, readLyricsErr := getId3Lyrics(data)
 	if _, ok := errors.AsType[*NoLyricsTagError](readLyricsErr); !ok {
 		panic("Lyrics metadataa already present, overwriting not yet supported")
 	}
@@ -313,6 +391,15 @@ func bytesToString(bytes []byte) string {
 			uints[i/2] = binary.BigEndian.Uint16(bytes[i : i+2])
 		} else {
 			uints[i/2] = binary.LittleEndian.Uint16(bytes[i : i+2])
+		}
+	}
+
+	// trim termination bytes
+	for len(uints) > 0 {
+		if uints[len(uints)-1] == 0 {
+			uints = uints[:len(uints)-1]
+		} else {
+			break
 		}
 	}
 

@@ -2,8 +2,10 @@ package main
 
 import (
 	"fmt"
+	"os"
 	"slices"
 	"testing"
+	"unicode/utf16"
 )
 
 func TestSyncsafeToInt(t *testing.T) {
@@ -69,14 +71,54 @@ func TestMp3Len(t *testing.T) {
 	}
 }
 
-func TestFetchLyrics(t *testing.T) {
-	// GET /api/get?artist_name=Borislav+Slavov&track_name=I+Want+to+Live&album_name=Baldur%27s+Gate+3+(Original+Game+Soundtrack)&duration=233
+// func TestFetchLyrics(t *testing.T) {
+// 	// GET /api/get?artist_name=Borislav+Slavov&track_name=I+Want+to+Live&album_name=Baldur%27s+Gate+3+(Original+Game+Soundtrack)&duration=233
 
-	l, err := fetchLyrics("I Want to Live", "Borislav Slavov", "Baldur's Gate 3 (Original Game Soundtrack)", 233)
+// 	l, err := fetchLyrics("I Want to Live", "Borislav Slavov", "Baldur's Gate 3 (Original Game Soundtrack)", 233)
+
+// 	if err != nil {
+// 		fmt.Print(err.Error())
+// 	}
+// 	fmt.Println(l)
+
+// }
+
+func TestGetId3Artist(t *testing.T) {
+	bytes, err := os.ReadFile("test/hello-world.mp3")
+	expected := "Brad"
+	actual, err := getId3Artist(bytes)
+
+	expectedBytes := utf16.Encode([]rune(expected))
+	actualBytes := utf16.Encode([]rune(actual))
+	if err != nil {
+		t.Errorf(`getId3Artist() error: %s"`, err.Error())
+	} else if !slices.Equal(expectedBytes, actualBytes) {
+		fmt.Println(expectedBytes)
+		fmt.Println(actualBytes)
+		t.Errorf(`getId3Artist() = "%s", want "%s"`, actual, expected)
+	}
+}
+
+func TestGetId3Title(t *testing.T) {
+	bytes, err := os.ReadFile("test/hello-world.mp3")
+	expected := "Hello World"
+	actual, err := getId3Title(bytes)
 
 	if err != nil {
-		fmt.Print(err.Error())
+		t.Errorf(`getId3Title() error: %s"`, err.Error())
+	} else if expected != actual {
+		t.Errorf(`getId3Title() = "%s", want "%s"`, actual, expected)
 	}
-	fmt.Println(l)
+}
 
+func TestGetId3Album(t *testing.T) {
+	bytes, err := os.ReadFile("test/hello-world.mp3")
+	expected := "addlyrics test"
+	actual, err := getId3Album(bytes)
+
+	if err != nil {
+		t.Errorf(`getId3Album() error: %s"`, err.Error())
+	} else if expected != actual {
+		t.Errorf(`getId3Album() = "%s", want "%s"`, actual, expected)
+	}
 }
