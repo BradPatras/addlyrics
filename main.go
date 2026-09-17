@@ -14,6 +14,7 @@ import (
 	"strings"
 	"unicode/utf16"
 
+	"github.com/alexflint/go-arg"
 	"github.com/tcolgate/mp3"
 )
 
@@ -62,9 +63,69 @@ func (e *ExistingLyricsTagError) Error() string {
 //     }
 // }
 
+var args struct {
+	Target      string `arg:"required,-t,--target" help:"The mp3 file or directory of mp3 files that should have lyrics added. If target is a directory, lyrics will be added to all mp3s in the directory (see also: --searchdepth)"`
+	SearchDepth int    `arg:"-d, --searchdepth" help:"If target is directory, searchdepth determines how far into subdirectories to go when searching for mp3s. Useful when dealing with a directory of albums."`
+}
+
 func main() {
-	// fmt.Println(readLyricsFromFile("test.mp3"))
-	writeLyricsToFile("Hello, world!", "test/hello-world.mp3", "out.mp3")
+	arg.MustParse(&args)
+
+	f, err := os.Open(args.Target)
+
+	if err != nil {
+		panic("Failed to access target")
+	}
+
+	info, err := f.Stat()
+
+	if info.IsDir() {
+		scanDir(0, f)
+	} else {
+		fetchAndWriteLyricsToFile(args.Target, f)
+	}
+}
+
+func scanDir(depth int, f *os.File) error {
+	// var err error
+	// for {
+		
+	// }
+
+	return nil
+}
+
+func fetchAndWriteLyricsToFile(fp string, f *os.File) error {
+	info, err := f.Stat()
+	bytes := make([]byte, info.Size())
+	_, err = f.Read(bytes)
+
+	if err != nil {
+		return err
+	}
+
+	// required
+	title, err := getId3Title(bytes)
+	if err != nil {
+		return err
+	}
+	artist, err := getId3Artist(bytes)
+	if err != nil {
+		return err
+	}
+
+	// optional
+	album, _ := getId3Album(bytes)
+	duration, _ := getMp3Len(fp)
+
+	lyrics, err := fetchLyrics(title, artist, album, duration)
+	if err != nil {
+		return err
+	}
+
+	writeLyricsToFile(lyrics, fp, fp)
+
+	return nil
 }
 
 func getId3Lyrics(dat []byte) (string, error) {
