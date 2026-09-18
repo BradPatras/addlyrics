@@ -14,6 +14,8 @@ import (
 	"strings"
 	"unicode/utf16"
 
+	"github.com/bmatcuk/doublestar"
+
 	"github.com/alexflint/go-arg"
 	"github.com/tcolgate/mp3"
 )
@@ -21,25 +23,25 @@ import (
 type InvalidID3Error struct{}
 
 func (e *InvalidID3Error) Error() string {
-	return "Invalid: file does not contain valid ID3v2.3 metadata"
+	return "! Invalid: file does not contain valid ID3v2.3 metadata"
 }
 
 type NoLyricsTagError struct{}
 
 func (e *NoLyricsTagError) Error() string {
-	return "Missing lyrics: USLT tag not found"
+	return "! Missing lyrics: USLT tag not found"
 }
 
 type NoTitleTagError struct{}
 
 func (e *NoTitleTagError) Error() string {
-	return "Missing title: TIT2 tag not found"
+	return "! Missing title: TIT2 tag not found"
 }
 
 type NoArtistTagError struct{}
 
 func (e *NoArtistTagError) Error() string {
-	return "Missing artist: TPE1/TPE2 tag not found"
+	return "! Missing artist: TPE1/TPE2 tag not found"
 }
 
 type TextFrameNotFoundError struct {
@@ -47,13 +49,21 @@ type TextFrameNotFoundError struct {
 }
 
 func (e *TextFrameNotFoundError) Error() string {
-	return fmt.Sprintf("Missing data frame: %s", e.frameId)
+	return fmt.Sprintf("! Missing data frame: %s", e.frameId)
 }
 
 type ExistingLyricsTagError struct{}
 
 func (e *ExistingLyricsTagError) Error() string {
-	return "Existing lyrics: Overwriting not supported"
+	return "! Existing lyrics: Overwriting not supported"
+}
+
+type FailedToFetchLyricsError struct {
+	title string
+}
+
+func (e *FailedToFetchLyricsError) Error() string {
+	return fmt.Sprintf("! Failed to find lyrics for %s", e.title)
 }
 
 // var myErr *MyError
@@ -80,22 +90,29 @@ func main() {
 	info, err := f.Stat()
 
 	if info.IsDir() {
-		scanDir(0, f)
+		fmt.Println("Searching target dir for mp3s...")
+		paths, err := doublestar.Glob(args.Target + "/**/*.mp3")
+		if err != nil {
+			fmt.Print(err.Error())
+			return
+		}
+		fmt.Printf("Found %d mp3s\n", len(paths))
+		for _, path := range paths {
+			err = fetchAndWriteLyricsToFile(path)
+			if err != nil {
+				fmt.Println(err.Error())
+			}
+		}
 	} else {
-		fetchAndWriteLyricsToFile(args.Target, f)
+		err = fetchAndWriteLyricsToFile(args.Target)
+		if err != nil {
+			fmt.Println(err.Error())
+		}
 	}
 }
 
-func scanDir(depth int, f *os.File) error {
-	// var err error
-	// for {
-		
-	// }
-
-	return nil
-}
-
-func fetchAndWriteLyricsToFile(fp string, f *os.File) error {
+func fetchAndWriteLyricsToFile(fp string) error {
+	f, err := os.Open(fp)
 	info, err := f.Stat()
 	bytes := make([]byte, info.Size())
 	_, err = f.Read(bytes)
@@ -123,9 +140,7 @@ func fetchAndWriteLyricsToFile(fp string, f *os.File) error {
 		return err
 	}
 
-	writeLyricsToFile(lyrics, fp, fp)
-
-	return nil
+	return writeLyricsToFile(lyrics, fp, fp)
 }
 
 func getId3Lyrics(dat []byte) (string, error) {
@@ -284,7 +299,7 @@ func addLyricsToID3Data(lyrics string, language string, data []byte) ([]byte, er
 	// check for existing lyrics tag, bail if found - I'll implement proper handling of this case later
 	_, readLyricsErr := getId3Lyrics(data)
 	if _, ok := errors.AsType[*NoLyricsTagError](readLyricsErr); !ok {
-		panic("Lyrics metadataa already present, overwriting not yet supported")
+		return []byte{}, &ExistingLyricsTagError{}
 	}
 
 	// create the lyrics frame
@@ -333,6 +348,7 @@ func createLyricsFrame(lyrics string, language string) ([]byte, error) {
 }
 
 func fetchLyrics(title string, artist string, album string, duration int64) (string, error) {
+	fmt.Printf("Fetching lyrics for %s - %s...\n", title, artist)
 	endpoint := fmt.Sprintf("https://lrclib.net/api/get?track_name=%s&artist_name=%s&album_name=%s&duration=%d", url.QueryEscape(title), url.QueryEscape(artist), url.QueryEscape(album), duration)
 	client := &http.Client{}
 
@@ -361,8 +377,11 @@ func fetchLyrics(title string, artist string, album string, duration int64) (str
 	}
 
 	responseMap := response.(map[string]any)
-
-	return responseMap["plainLyrics"].(string), nil
+	if responseMap["plainLyrics"] != nil {
+		return responseMap["plainLyrics"].(string), nil
+	} else {
+		return "", &FailedToFetchLyricsError{title}
+	}
 }
 
 // Convert uint32 to bytes
