@@ -14,6 +14,7 @@ import (
 	"strings"
 	"unicode/utf16"
 
+	"charm.land/lipgloss/v2"
 	"github.com/bmatcuk/doublestar"
 
 	"github.com/alexflint/go-arg"
@@ -78,6 +79,9 @@ var args struct {
 	SearchDepth int    `arg:"-d, --searchdepth" help:"If target is directory, searchdepth determines how far into subdirectories to go when searching for mp3s. Useful when dealing with a directory of albums."`
 }
 
+var errorStyle = lipgloss.NewStyle().Foreground(lipgloss.BrightRed)
+var accentStyle = lipgloss.NewStyle().Foreground(lipgloss.Green)
+
 func main() {
 	arg.MustParse(&args)
 
@@ -93,20 +97,20 @@ func main() {
 		fmt.Println("Searching target dir for mp3s...")
 		paths, err := doublestar.Glob(args.Target + "/**/*.mp3")
 		if err != nil {
-			fmt.Print(err.Error())
+			fmt.Print(errorStyle.Render(indnt(err.Error(), 1)))
 			return
 		}
 		fmt.Printf("Found %d mp3s\n", len(paths))
 		for _, path := range paths {
 			err = fetchAndWriteLyricsToFile(path)
 			if err != nil {
-				fmt.Println(err.Error())
+				fmt.Println(errorStyle.Render(indnt(err.Error(), 1)))
 			}
 		}
 	} else {
 		err = fetchAndWriteLyricsToFile(args.Target)
 		if err != nil {
-			fmt.Println(err.Error())
+			fmt.Println(errorStyle.Render(indnt(err.Error(), 1)))
 		}
 	}
 }
@@ -348,7 +352,8 @@ func createLyricsFrame(lyrics string, language string) ([]byte, error) {
 }
 
 func fetchLyrics(title string, artist string, album string, duration int64) (string, error) {
-	fmt.Printf("Fetching lyrics for %s - %s...\n", title, artist)
+	itemLabel := accentStyle.Render(fmt.Sprintf("%s - %s...", title, artist))
+	fmt.Printf("Fetching lyrics for %s\n", itemLabel)
 	endpoint := fmt.Sprintf("https://lrclib.net/api/get?track_name=%s&artist_name=%s&album_name=%s&duration=%d", url.QueryEscape(title), url.QueryEscape(artist), url.QueryEscape(album), duration)
 	client := &http.Client{}
 
@@ -382,6 +387,14 @@ func fetchLyrics(title string, artist string, album string, duration int64) (str
 	} else {
 		return "", &FailedToFetchLyricsError{title}
 	}
+}
+
+func indnt(s string, level int) string {
+	r := s
+	for range level {
+		r = "	" + r
+	}
+	return r
 }
 
 // Convert uint32 to bytes
