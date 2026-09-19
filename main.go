@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"unicode/utf16"
@@ -53,10 +54,12 @@ func (e *TextFrameNotFoundError) Error() string {
 	return fmt.Sprintf("! Missing data frame: %s", e.frameId)
 }
 
-type ExistingLyricsTagError struct{}
+type ExistingLyricsTagError struct {
+	filename string
+}
 
 func (e *ExistingLyricsTagError) Error() string {
-	return "! Existing lyrics: Overwriting not supported"
+	return fmt.Sprintf("! Lyrics already present, skipping %s", e.filename)
 }
 
 type FailedToFetchLyricsError struct {
@@ -64,7 +67,7 @@ type FailedToFetchLyricsError struct {
 }
 
 func (e *FailedToFetchLyricsError) Error() string {
-	return fmt.Sprintf("! Failed to find lyrics for %s", e.title)
+	return fmt.Sprintf("! Failed to fetch lyrics for %s", e.title)
 }
 
 // var myErr *MyError
@@ -81,6 +84,10 @@ var args struct {
 
 var errorStyle = lipgloss.NewStyle().Foreground(lipgloss.BrightRed)
 var accentStyle = lipgloss.NewStyle().Foreground(lipgloss.Green)
+var foundCount = 0
+var skippedCount = 0
+var failedCount = 0
+var lyricsAddedCount = 0
 
 func main() {
 	arg.MustParse(&args)
@@ -88,6 +95,7 @@ func main() {
 	f, err := os.Open(args.Target)
 
 	if err != nil {
+		printErr(err)
 		panic("Failed to access target")
 	}
 
@@ -97,25 +105,44 @@ func main() {
 		fmt.Println("Searching target dir for mp3s...")
 		paths, err := doublestar.Glob(args.Target + "/**/*.mp3")
 		if err != nil {
-			fmt.Print(errorStyle.Render(indnt(err.Error(), 1)))
+			printErr(err)
 			return
 		}
-		fmt.Printf("Found %d mp3s\n", len(paths))
+
+		foundCount = len(paths)
+		fmt.Printf("Found %d mp3s\n", foundCount)
+
 		for _, path := range paths {
 			err = fetchAndWriteLyricsToFile(path)
 			if err != nil {
+				failedCount += 1
 				fmt.Println(errorStyle.Render(indnt(err.Error(), 1)))
+			} else {
+				lyricsAddedCount += 1
 			}
 		}
 	} else {
 		err = fetchAndWriteLyricsToFile(args.Target)
 		if err != nil {
+			failedCount += 1
 			fmt.Println(errorStyle.Render(indnt(err.Error(), 1)))
+		} else {
+			lyricsAddedCount += 1
 		}
+	}
+
+	fmt.Printf("\naddlyrics summary:\n  MP3s found: %d\n  Skipped: %d\n  Failed: %d\n  Lyrics added: %d\n", foundCount, skippedCount, failedCount, lyricsAddedCount)
+}
+
+func printErr(e error) {
+	if e != nil {
+		fmt.Println(errorStyle.Render(indnt(e.Error(), 1)))
 	}
 }
 
 func fetchAndWriteLyricsToFile(fp string) error {
+	_, filename := filepath.Split(fp)
+	fmt.Printf("Scanning %s\n", ellipsize(filename, 16))
 	f, err := os.Open(fp)
 	info, err := f.Stat()
 	bytes := make([]byte, info.Size())
@@ -133,6 +160,21 @@ func fetchAndWriteLyricsToFile(fp string) error {
 	artist, err := getId3Artist(bytes)
 	if err != nil {
 		return err
+	}
+
+	name := strings.Join([]string{artist, title}, " - ")
+	if len(name) == 0 {
+		name = accentStyle.Render(filename)
+	}
+
+	// check for existing lyrics tag, bail if found - I'll implement proper handling of this case later maybe
+	_, readLyricsErr := getId3Lyrics(bytes)
+	if _, ok := errors.AsType[*NoLyricsTagError](readLyricsErr); !ok {
+		skippedCount += 1
+		printErr(&ExistingLyricsTagError{name})
+		return nil
+	} else {
+		fmt.Printf("Fetching lyrics for %s\n", name)
 	}
 
 	// optional
@@ -352,9 +394,8 @@ func createLyricsFrame(lyrics string, language string) ([]byte, error) {
 }
 
 func fetchLyrics(title string, artist string, album string, duration int64) (string, error) {
-	itemLabel := accentStyle.Render(fmt.Sprintf("%s - %s...", title, artist))
-	fmt.Printf("Fetching lyrics for %s\n", itemLabel)
 	endpoint := fmt.Sprintf("https://lrclib.net/api/get?track_name=%s&artist_name=%s&album_name=%s&duration=%d", url.QueryEscape(title), url.QueryEscape(artist), url.QueryEscape(album), duration)
+	fmt.Println(endpoint)
 	client := &http.Client{}
 
 	req, err := http.NewRequest("GET", endpoint, nil)
@@ -509,4 +550,14 @@ func stringToBytes(s string) (bytes []byte) {
 	}
 
 	return bytes
+}
+
+// ellipsize middle keep head and tail
+func ellipsize(s string, n int) string {
+	runes := []rune(s)
+	if len(runes) <= n {
+		return s
+	} else {
+		return string(runes[:n]) + "..." + string(runes[len(runes)-n:])
+	}
 }
