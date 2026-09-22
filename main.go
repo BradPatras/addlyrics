@@ -12,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 	"unicode/utf16"
@@ -139,13 +140,15 @@ func addLyricsForPaths(paths []string) {
 			handleFetchError(err)
 		} else {
 			lyricsAddedCount += 1
-			time.Sleep(500 * time.Millisecond)
+			fmt.Println(indnt("Lyrics added!", 1))
+			// Go easy on the free lyrics api
+			time.Sleep(100 * time.Millisecond)
 		}
 	}
 }
 
 func handleFetchError(e error) {
-	if _, ok := errors.AsType[*ExistingLyricsTagError](e); !ok {
+	if _, ok := errors.AsType[*ExistingLyricsTagError](e); ok {
 		skippedCount += 1
 		fmt.Println(indnt(e.Error(), 1))
 	} else {
@@ -192,16 +195,26 @@ func fetchAndWriteLyricsToFile(fp string) error {
 	if _, ok := errors.AsType[*NoLyricsTagError](readLyricsErr); !ok {
 		return &ExistingLyricsTagError{name}
 	} else {
-		fmt.Printf("Fetching lyrics for %s\n", name)
+		fmt.Printf(indnt("Fetching lyrics for %s\n", 1), name)
 	}
 
 	// optional
 	album, _ := getId3Album(bytes)
 	duration, _ := getMp3Len(fp)
 
-	lyrics, err := fetchLyrics(title, artist, album, duration)
-	if err != nil {
-		return err
+	var lyrics string
+	shouldRetry := true
+	for shouldRetry {
+		shouldRetry = false
+		lyrics, err = fetchLyrics(title, artist, album, duration)
+		if err != nil {
+			if rateLimitErr, ok := errors.AsType[*ApiRateLimitError](err); ok {
+				fmt.Println(indnt(rateLimitErr.Error(), 1))
+				time.Sleep(time.Duration(rateLimitErr.waitSeconds) * time.Second)
+			} else {
+				return err
+			}
+		}
 	}
 
 	return writeLyricsToFile(lyrics, fp, fp)
@@ -413,7 +426,6 @@ func createLyricsFrame(lyrics string, language string) ([]byte, error) {
 
 func fetchLyrics(title string, artist string, album string, duration int64) (string, error) {
 	endpoint := fmt.Sprintf("https://lrclib.net/api/get?track_name=%s&artist_name=%s&album_name=%s&duration=%d", url.QueryEscape(title), url.QueryEscape(artist), url.QueryEscape(album), duration)
-	fmt.Println(endpoint)
 	client := &http.Client{}
 
 	req, err := http.NewRequest("GET", endpoint, nil)
@@ -434,6 +446,20 @@ func fetchLyrics(title string, artist string, album string, duration int64) (str
 		return "", err
 	}
 
+	// Check for rate limiting
+	if resp.StatusCode == 429 {
+		for k, v := range resp.Header {
+			if k == "Retry-After" && len(v) > 0 {
+				waitTime, err := strconv.Atoi(v[0])
+				if err == nil {
+					return "", &ApiRateLimitError{waitTime}
+				} else {
+					return "", &FailedToFetchLyricsError{title}
+				}
+			}
+		}
+	}
+
 	var response any
 	err = json.Unmarshal(body, &response)
 	if err != nil {
@@ -451,7 +477,7 @@ func fetchLyrics(title string, artist string, album string, duration int64) (str
 func indnt(s string, level int) string {
 	r := s
 	for range level {
-		r = "	" + r
+		r = "  " + r
 	}
 	return r
 }
