@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"time"
 	"unicode/utf16"
 
 	"charm.land/lipgloss/v2"
@@ -70,6 +71,14 @@ func (e *FailedToFetchLyricsError) Error() string {
 	return fmt.Sprintf("! Failed to fetch lyrics for %s", e.title)
 }
 
+type ApiRateLimitError struct {
+	waitSeconds int
+}
+
+func (e *ApiRateLimitError) Error() string {
+	return fmt.Sprintf("! API rate limit tripped, waiting %d seconds", e.waitSeconds)
+}
+
 // var myErr *MyError
 // if errors.As(err, &myErr) {
 //     if myErr.Code == 42 {
@@ -93,45 +102,56 @@ func main() {
 	arg.MustParse(&args)
 
 	f, err := os.Open(args.Target)
-
 	if err != nil {
 		printErr(err)
 		panic("Failed to access target")
 	}
 
 	info, err := f.Stat()
+	if err != nil {
+		printErr(err)
+		panic("Failed to access target")
+	}
 
+	var paths []string
 	if info.IsDir() {
 		fmt.Println("Searching target dir for mp3s...")
-		paths, err := doublestar.Glob(args.Target + "/**/*.mp3")
+		paths, err = doublestar.Glob(args.Target + "/**/*.mp3")
 		if err != nil {
 			printErr(err)
 			return
 		}
-
-		foundCount = len(paths)
 		fmt.Printf("Found %d mp3s\n", foundCount)
-
-		for _, path := range paths {
-			err = fetchAndWriteLyricsToFile(path)
-			if err != nil {
-				failedCount += 1
-				fmt.Println(errorStyle.Render(indnt(err.Error(), 1)))
-			} else {
-				lyricsAddedCount += 1
-			}
-		}
 	} else {
-		err = fetchAndWriteLyricsToFile(args.Target)
-		if err != nil {
-			failedCount += 1
-			fmt.Println(errorStyle.Render(indnt(err.Error(), 1)))
-		} else {
-			lyricsAddedCount += 1
-		}
+		paths = append(paths, args.Target)
 	}
 
+	foundCount = len(paths)
+	addLyricsForPaths(paths)
+
 	fmt.Printf("\naddlyrics summary:\n  MP3s found: %d\n  Skipped: %d\n  Failed: %d\n  Lyrics added: %d\n", foundCount, skippedCount, failedCount, lyricsAddedCount)
+}
+
+func addLyricsForPaths(paths []string) {
+	for _, path := range paths {
+		err := fetchAndWriteLyricsToFile(path)
+		if err != nil {
+			handleFetchError(err)
+		} else {
+			lyricsAddedCount += 1
+			time.Sleep(500 * time.Millisecond)
+		}
+	}
+}
+
+func handleFetchError(e error) {
+	if _, ok := errors.AsType[*ExistingLyricsTagError](e); !ok {
+		skippedCount += 1
+		fmt.Println(indnt(e.Error(), 1))
+	} else {
+		failedCount += 1
+		fmt.Println(errorStyle.Render(indnt(e.Error(), 1)))
+	}
 }
 
 func printErr(e error) {
@@ -170,9 +190,7 @@ func fetchAndWriteLyricsToFile(fp string) error {
 	// check for existing lyrics tag, bail if found - I'll implement proper handling of this case later maybe
 	_, readLyricsErr := getId3Lyrics(bytes)
 	if _, ok := errors.AsType[*NoLyricsTagError](readLyricsErr); !ok {
-		skippedCount += 1
-		printErr(&ExistingLyricsTagError{name})
-		return nil
+		return &ExistingLyricsTagError{name}
 	} else {
 		fmt.Printf("Fetching lyrics for %s\n", name)
 	}
