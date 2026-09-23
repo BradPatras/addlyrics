@@ -3,13 +3,13 @@ module github.com/BradPatras/addlyrics
 go 1.27.1
 
 require (
+	charm.land/lipgloss/v2 v2.0.6
 	github.com/alexflint/go-arg v1.6.1
 	github.com/bmatcuk/doublestar v1.3.4
 	github.com/tcolgate/mp3 v0.0.0-20170426193717-e79c5a46d300
 )
 
 require (
-	charm.land/lipgloss/v2 v2.0.6 // indirect
 	github.com/alexflint/go-scalar v1.2.0 // indirect
 	github.com/charmbracelet/colorprofile v0.4.3 // indirect
 	github.com/charmbracelet/ultraviolet v0.0.0-20260811164956-006e29f97886 // indirect
