@@ -19,59 +19,8 @@ import (
 	"github.com/alexflint/go-arg"
 )
 
-type NoLyricsTagError struct{}
-
-func (e *NoLyricsTagError) Error() string {
-	return "! Missing lyrics: USLT tag not found"
-}
-
-type NoTitleTagError struct{}
-
-func (e *NoTitleTagError) Error() string {
-	return "! Missing title: TIT2 tag not found"
-}
-
-type NoArtistTagError struct{}
-
-func (e *NoArtistTagError) Error() string {
-	return "! Missing artist: TPE1/TPE2 tag not found"
-}
-
-type TextFrameNotFoundError struct {
-	frameId string
-}
-
-func (e *TextFrameNotFoundError) Error() string {
-	return fmt.Sprintf("! Missing data frame: %s", e.frameId)
-}
-
-type ExistingLyricsTagError struct {
-	filename string
-}
-
-func (e *ExistingLyricsTagError) Error() string {
-	return fmt.Sprintf("! Lyrics already present, skipping %s", e.filename)
-}
-
-type FailedToFetchLyricsError struct {
-	title string
-}
-
-func (e *FailedToFetchLyricsError) Error() string {
-	return fmt.Sprintf("! Failed to fetch lyrics for %s", e.title)
-}
-
-type ApiRateLimitError struct {
-	waitSeconds int
-}
-
-func (e *ApiRateLimitError) Error() string {
-	return fmt.Sprintf("! API rate limit tripped, waiting %d seconds", e.waitSeconds)
-}
-
 var args struct {
-	Target      string `arg:"required,-t,--target" help:"The mp3 file or directory of mp3 files that should have lyrics added. If target is a directory, lyrics will be added to all mp3s in the directory (see also: --searchdepth)"`
-	SearchDepth int    `arg:"-d, --searchdepth" help:"If target is directory, searchdepth determines how far into subdirectories to go when searching for mp3s. Useful when dealing with a directory of albums."`
+	Target string `arg:"required,-t,--target" help:"The mp3 file or directory of mp3 files that should have lyrics added. If target is a directory, lyrics will be added to all mp3s in the directory (see also: --searchdepth)"`
 }
 
 var errorStyle = lipgloss.NewStyle().Foreground(lipgloss.BrightRed)
@@ -135,12 +84,6 @@ func handleFetchError(e error) {
 		fmt.Println(indnt(e.Error(), 1))
 	} else {
 		failedCount += 1
-		fmt.Println(errorStyle.Render(indnt(e.Error(), 1)))
-	}
-}
-
-func printErr(e error) {
-	if e != nil {
 		fmt.Println(errorStyle.Render(indnt(e.Error(), 1)))
 	}
 }
@@ -278,8 +221,8 @@ func fetchLyrics(title string, artist string, album string, duration int64) (str
 	}
 }
 
-func check(err error) {
-	if err != nil {
-		panic(err)
+func printErr(e error) {
+	if e != nil {
+		fmt.Println(errorStyle.Render(indnt(e.Error(), 1)))
 	}
 }
