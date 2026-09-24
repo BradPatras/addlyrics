@@ -65,7 +65,7 @@ func ellipsize(s string, n int) string {
 	}
 }
 
-func indnt(s string, level int) string {
+func ind(s string, level int) string {
 	r := s
 	for range level {
 		r = "  " + r

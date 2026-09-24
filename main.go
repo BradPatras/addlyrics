@@ -71,7 +71,7 @@ func addLyricsForPaths(paths []string) {
 			handleFetchError(err)
 		} else {
 			lyricsAddedCount += 1
-			fmt.Println(indnt("Lyrics added!", 1))
+			fmt.Println(ind("Lyrics added!", 1))
 			// Go easy on the free lyrics api
 			time.Sleep(100 * time.Millisecond)
 		}
@@ -81,10 +81,10 @@ func addLyricsForPaths(paths []string) {
 func handleFetchError(e error) {
 	if _, ok := errors.AsType[*ExistingLyricsTagError](e); ok {
 		skippedCount += 1
-		fmt.Println(indnt(e.Error(), 1))
+		fmt.Println(ind(e.Error(), 1))
 	} else {
 		failedCount += 1
-		fmt.Println(errorStyle.Render(indnt(e.Error(), 1)))
+		fmt.Println(errorStyle.Render(ind(e.Error(), 1)))
 	}
 }
 
@@ -120,7 +120,7 @@ func fetchAndWriteLyricsToFile(fp string) error {
 	if _, ok := errors.AsType[*NoLyricsTagError](readLyricsErr); !ok {
 		return &ExistingLyricsTagError{name}
 	} else {
-		fmt.Printf(indnt("Fetching lyrics for %s\n", 1), name)
+		fmt.Printf(ind("Fetching lyrics for %s\n", 1), name)
 	}
 
 	// optional
@@ -134,7 +134,7 @@ func fetchAndWriteLyricsToFile(fp string) error {
 		lyrics, err = fetchLyrics(title, artist, album, duration)
 		if err != nil {
 			if rateLimitErr, ok := errors.AsType[*ApiRateLimitError](err); ok {
-				fmt.Println(indnt(rateLimitErr.Error(), 1))
+				fmt.Println(ind(rateLimitErr.Error(), 1))
 				time.Sleep(time.Duration(rateLimitErr.waitSeconds) * time.Second)
 			} else {
 				return err
@@ -223,6 +223,6 @@ func fetchLyrics(title string, artist string, album string, duration int64) (str
 
 func printErr(e error) {
 	if e != nil {
-		fmt.Println(errorStyle.Render(indnt(e.Error(), 1)))
+		fmt.Println(errorStyle.Render(ind(e.Error(), 1)))
 	}
 }
