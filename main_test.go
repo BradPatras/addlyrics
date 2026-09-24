@@ -71,18 +71,6 @@ func TestMp3Len(t *testing.T) {
 	}
 }
 
-// func TestFetchLyrics(t *testing.T) {
-// 	// GET /api/get?artist_name=Borislav+Slavov&track_name=I+Want+to+Live&album_name=Baldur%27s+Gate+3+(Original+Game+Soundtrack)&duration=233
-
-// 	l, err := fetchLyrics("I Want to Live", "Borislav Slavov", "Baldur's Gate 3 (Original Game Soundtrack)", 233)
-
-// 	if err != nil {
-// 		fmt.Print(err.Error())
-// 	}
-// 	fmt.Println(l)
-
-// }
-
 func TestGetId3Artist(t *testing.T) {
 	bytes, err := os.ReadFile("test/hello-world.mp3")
 	expected := "Brad"

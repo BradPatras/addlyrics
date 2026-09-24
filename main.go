@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"encoding/json/v2"
 	"errors"
 	"fmt"
@@ -20,7 +21,7 @@ import (
 )
 
 var args struct {
-	Target string `arg:"required,-t,--target" help:"The mp3 file or directory of mp3 files that should have lyrics added. If target is a directory, lyrics will be added to all mp3s in the directory (see also: --searchdepth)"`
+	Target string `arg:"required,-t,--target" help:"The mp3 file or directory of mp3 files that should have lyrics added. If target is a directory, lyrics will be added to all mp3s in the directory"`
 }
 
 var errorStyle = lipgloss.NewStyle().Foreground(lipgloss.BrightRed)
@@ -59,9 +60,31 @@ func main() {
 	}
 
 	foundCount = len(paths)
+
+	if !getUserConfirmation(foundCount) {
+		return
+	}
+
 	addLyricsForPaths(paths)
 
 	fmt.Printf("\naddlyrics summary:\n  MP3s found: %d\n  Skipped: %d\n  Failed: %d\n  Lyrics added: %d\n", foundCount, skippedCount, failedCount, lyricsAddedCount)
+}
+
+func getUserConfirmation(foundCound int) bool {
+	fmt.Printf("%d mp3 files found, press 'y' to continue. Warning: this action cannot be undone. MAKE A BACKUP BEFORE RUNNING THIS TOOL.\n")
+	input := collectInput()
+	return input == "y"
+}
+
+func collectInput() string {
+	reader := bufio.NewReader(os.Stdin)
+	for {
+		fmt.Print("→ ")
+		text, _ := reader.ReadString('\n')
+		text = strings.Replace(text, "\n", "", -1)
+
+		return text
+	}
 }
 
 func addLyricsForPaths(paths []string) {
