@@ -21,7 +21,8 @@ import (
 )
 
 var args struct {
-	Target string `arg:"required,-t,--target" help:"The mp3 file or directory of mp3 files that should have lyrics added. If target is a directory, lyrics will be added to all mp3s in the directory"`
+	Target    string `arg:"required,-t,--target" help:"The mp3 file or directory of mp3 files that should have lyrics added. If target is a directory, lyrics will be added to all mp3s in the directory and its subdirectories"`
+	NoConfirm bool   `arg:"--no-confirm,-n" help:"Skip the confirmation prompt. Warning: Use this at your own risk and only if you have backed up your files. This tool has the capacity to corrupt mp3 files."`
 }
 
 var errorStyle = lipgloss.NewStyle().Foreground(lipgloss.BrightRed)
@@ -61,8 +62,10 @@ func main() {
 
 	foundCount = len(paths)
 
-	if !getUserConfirmation(foundCount) {
-		return
+	if !args.NoConfirm {
+		if !getUserConfirmation(foundCount) {
+			return
+		}
 	}
 
 	addLyricsForPaths(paths)
