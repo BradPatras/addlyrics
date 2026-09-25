@@ -49,13 +49,12 @@ func main() {
 
 	var paths []string
 	if info.IsDir() {
-		fmt.Println("Searching target dir for mp3s...")
+		fmt.Println("\nSearching target dir for mp3s...")
 		paths, err = doublestar.Glob(args.Target + "/**/*.mp3")
 		if err != nil {
 			printErr(err)
 			return
 		}
-		fmt.Printf("Found %d mp3s\n", foundCount)
 	} else {
 		paths = append(paths, args.Target)
 	}
@@ -73,8 +72,8 @@ func main() {
 	fmt.Printf("\naddlyrics summary:\n  MP3s found: %d\n  Skipped: %d\n  Failed: %d\n  Lyrics added: %d\n", foundCount, skippedCount, failedCount, lyricsAddedCount)
 }
 
-func getUserConfirmation(foundCound int) bool {
-	fmt.Printf("%d mp3 files found, press 'y' to continue. Warning: this action cannot be undone. MAKE A BACKUP BEFORE RUNNING THIS TOOL.\n")
+func getUserConfirmation(foundCount int) bool {
+	fmt.Printf("\n%d mp3 files found, press 'y' to initiate the process of adding lyrics to mp3s. \n! Warning: this action cannot be undone. MAKE A BACKUP BEFORE RUNNING THIS TOOL.\n", foundCount)
 	input := collectInput()
 	return input == "y"
 }
