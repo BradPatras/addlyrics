@@ -67,6 +67,8 @@ func main() {
 		}
 	}
 
+	println()
+
 	addLyricsForPaths(paths)
 
 	fmt.Printf("\naddlyrics summary:\n  MP3s found: %d\n  Skipped: %d\n  Failed: %d\n  Lyrics added: %d\n", foundCount, skippedCount, failedCount, lyricsAddedCount)
@@ -105,6 +107,9 @@ func addLyricsForPaths(paths []string) {
 
 func handleFetchError(e error) {
 	if _, ok := errors.AsType[*ExistingLyricsTagError](e); ok {
+		skippedCount += 1
+		fmt.Println(ind(e.Error(), 1))
+	} else if _, ok := errors.AsType[*InstrumentalError](e); ok {
 		skippedCount += 1
 		fmt.Println(ind(e.Error(), 1))
 	} else {
@@ -161,13 +166,18 @@ func fetchAndWriteLyricsToFile(fp string) error {
 			if rateLimitErr, ok := errors.AsType[*ApiRateLimitError](err); ok {
 				fmt.Println(ind(rateLimitErr.Error(), 1))
 				time.Sleep(time.Duration(rateLimitErr.waitSeconds) * time.Second)
+				shouldRetry = true
 			} else {
 				return err
 			}
 		}
 	}
 
-	return writeLyricsToFile(lyrics, fp, fp)
+	if len(strings.TrimSpace(lyrics)) == 0 {
+		return &InstrumentalError{}
+	} else {
+		return writeLyricsToFile(lyrics, fp, fp)
+	}
 }
 
 func readLyricsFromFile(fp string) (string, error) {
@@ -239,6 +249,11 @@ func fetchLyrics(title string, artist string, album string, duration int64) (str
 	}
 
 	responseMap := response.(map[string]any)
+
+	if responseMap["instrumental"] != nil && responseMap["instrumental"].(bool) {
+		return "", &InstrumentalError{}
+	}
+
 	if responseMap["plainLyrics"] != nil {
 		return responseMap["plainLyrics"].(string), nil
 	} else {

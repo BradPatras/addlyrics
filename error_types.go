@@ -33,7 +33,7 @@ type ExistingLyricsTagError struct {
 }
 
 func (e *ExistingLyricsTagError) Error() string {
-	return fmt.Sprintf("! Lyrics already present, skipping %s", e.filename)
+	return fmt.Sprintf("✔ Lyrics already present, skipping %s", e.filename)
 }
 
 type FailedToFetchLyricsError struct {
@@ -42,6 +42,12 @@ type FailedToFetchLyricsError struct {
 
 func (e *FailedToFetchLyricsError) Error() string {
 	return fmt.Sprintf("! Failed to fetch lyrics for %s", e.title)
+}
+
+type InstrumentalError struct {}
+
+func (e *InstrumentalError) Error() string {
+	return fmt.Sprintf("✔ Instrumental, skipping")
 }
 
 type ApiRateLimitError struct {
