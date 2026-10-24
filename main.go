@@ -26,6 +26,7 @@ var args struct {
 }
 
 var errorStyle = lipgloss.NewStyle().Foreground(lipgloss.BrightRed)
+var warningStyle = lipgloss.NewStyle().Foreground(lipgloss.Yellow)
 var accentStyle = lipgloss.NewStyle().Foreground(lipgloss.Green)
 var foundCount = 0
 var skippedCount = 0
@@ -49,6 +50,9 @@ func main() {
 
 	var paths []string
 	if info.IsDir() {
+		fmt.Println("\n╔═══════════════════════════╗")
+		fmt.Println("║   Welcome to addlyrics!   ║")
+		fmt.Println("╚═══════════════════════════╝")
 		fmt.Println("\nSearching target dir for mp3s...")
 		paths, err = doublestar.Glob(args.Target + "/**/*.mp3")
 		if err != nil {
@@ -75,7 +79,8 @@ func main() {
 }
 
 func getUserConfirmation(foundCount int) bool {
-	fmt.Printf("\n%d mp3 files found, press 'y' to initiate the process of adding lyrics to mp3s. \n! Warning: this action cannot be undone. MAKE A BACKUP BEFORE RUNNING THIS TOOL.\n", foundCount)
+	fmt.Printf("%d mp3 files found, enter 'y' to begin adding lyrics\n", foundCount)
+	fmt.Print(warningStyle.Render("! Warning: this action cannot be undone. MAKE A BACKUP BEFORE RUNNING THIS TOOL.\n"))
 	input := collectInput()
 	return input == "y"
 }
@@ -83,7 +88,7 @@ func getUserConfirmation(foundCount int) bool {
 func collectInput() string {
 	reader := bufio.NewReader(os.Stdin)
 	for {
-		fmt.Print("→ ")
+		fmt.Print("\n→ ")
 		text, _ := reader.ReadString('\n')
 		text = strings.Replace(text, "\n", "", -1)
 
@@ -98,7 +103,7 @@ func addLyricsForPaths(paths []string) {
 			handleFetchError(err)
 		} else {
 			lyricsAddedCount += 1
-			fmt.Println(ind("Lyrics added!", 1))
+			fmt.Println(accentStyle.Render(ind("✔ Lyrics added!", 1)))
 			// Go easy on the free lyrics api
 			time.Sleep(100 * time.Millisecond)
 		}
@@ -108,10 +113,10 @@ func addLyricsForPaths(paths []string) {
 func handleFetchError(e error) {
 	if _, ok := errors.AsType[*ExistingLyricsTagError](e); ok {
 		skippedCount += 1
-		fmt.Println(ind(e.Error(), 1))
+		fmt.Println(warningStyle.Render(ind(e.Error(), 1)))
 	} else if _, ok := errors.AsType[*InstrumentalError](e); ok {
 		skippedCount += 1
-		fmt.Println(ind(e.Error(), 1))
+		fmt.Println(warningStyle.Render(ind(e.Error(), 1)))
 	} else {
 		failedCount += 1
 		fmt.Println(errorStyle.Render(ind(e.Error(), 1)))
@@ -120,7 +125,7 @@ func handleFetchError(e error) {
 
 func fetchAndWriteLyricsToFile(fp string) error {
 	_, filename := filepath.Split(fp)
-	fmt.Printf("Scanning %s\n", ellipsize(filename, 16))
+	fmt.Printf("Scanning %s\n", ellipsize(filename, 28))
 	f, err := os.Open(fp)
 	info, err := f.Stat()
 	bytes := make([]byte, info.Size())
@@ -142,7 +147,7 @@ func fetchAndWriteLyricsToFile(fp string) error {
 
 	name := strings.Join([]string{artist, title}, " - ")
 	if len(name) == 0 {
-		name = accentStyle.Render(filename)
+		name = filename
 	}
 
 	// check for existing lyrics tag, bail if found - I'll implement proper handling of this case later maybe
@@ -215,7 +220,8 @@ func fetchLyrics(title string, artist string, album string, duration int64) (str
 		return "", err
 	}
 
-	req.Header.Set("User-Agent", "addlyrics (github.com/BradPatras/addlyrics)")
+	req.Header.Set("User-Agent", "addlyrics v0.0. (github.com/BradPatras/addlyrics)")
+	req.Header.Set("Lrclib-App-Id", "66c57ghPecVYAiiFvDkgs3XdMcQAUr-lonnExKLSt2Q")
 
 	resp, err := client.Do(req)
 	if err != nil {
@@ -228,6 +234,13 @@ func fetchLyrics(title string, artist string, album string, duration int64) (str
 		return "", err
 	}
 
+	var response any
+	err = json.Unmarshal(body, &response)
+	if err != nil {
+		return "", err
+	}
+	responseMap := response.(map[string]any)
+
 	// Check for rate limiting
 	if resp.StatusCode == 429 {
 		for k, v := range resp.Header {
@@ -235,20 +248,17 @@ func fetchLyrics(title string, artist string, album string, duration int64) (str
 				waitTime, err := strconv.Atoi(v[0])
 				if err == nil {
 					return "", &ApiRateLimitError{waitTime}
-				} else {
-					return "", &FailedToFetchLyricsError{title}
 				}
 			}
 		}
+	} else if resp.StatusCode > 299 || resp.StatusCode < 200 {
+		return "", &FailedToFetchLyricsError{
+			title,
+			resp.StatusCode,
+			responseMap["message"].(string),
+			responseMap["name"].(string),
+		}
 	}
-
-	var response any
-	err = json.Unmarshal(body, &response)
-	if err != nil {
-		return "", err
-	}
-
-	responseMap := response.(map[string]any)
 
 	if responseMap["instrumental"] != nil && responseMap["instrumental"].(bool) {
 		return "", &InstrumentalError{}
@@ -257,7 +267,7 @@ func fetchLyrics(title string, artist string, album string, duration int64) (str
 	if responseMap["plainLyrics"] != nil {
 		return responseMap["plainLyrics"].(string), nil
 	} else {
-		return "", &FailedToFetchLyricsError{title}
+		return "", &ResponseMissingPlainLyricsError{}
 	}
 }
 

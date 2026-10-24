@@ -33,21 +33,24 @@ type ExistingLyricsTagError struct {
 }
 
 func (e *ExistingLyricsTagError) Error() string {
-	return fmt.Sprintf("✔ Lyrics already present, skipping %s", e.filename)
+	return fmt.Sprint("✔ Skipping: Lyrics already present")
 }
 
 type FailedToFetchLyricsError struct {
-	title string
+	title      string
+	status     int
+	errMessage string
+	errName    string
 }
 
 func (e *FailedToFetchLyricsError) Error() string {
-	return fmt.Sprintf("! Failed to fetch lyrics for %s", e.title)
+	return fmt.Sprintf("! Failed to fetch lyrics for %s. status code: {%d} error: {%s} message: {%s}", e.title, e.status, e.errName, e.errMessage)
 }
 
-type InstrumentalError struct {}
+type InstrumentalError struct{}
 
 func (e *InstrumentalError) Error() string {
-	return fmt.Sprintf("✔ Instrumental, skipping")
+	return fmt.Sprint("✔ Skipping: Instrumental")
 }
 
 type ApiRateLimitError struct {
@@ -56,4 +59,10 @@ type ApiRateLimitError struct {
 
 func (e *ApiRateLimitError) Error() string {
 	return fmt.Sprintf("! API rate limit tripped, waiting %d seconds", e.waitSeconds)
+}
+
+type ResponseMissingPlainLyricsError struct{}
+
+func (e *ResponseMissingPlainLyricsError) Error() string {
+	return fmt.Sprintf("! Server response missing plain lyrics")
 }
