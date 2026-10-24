@@ -234,13 +234,6 @@ func fetchLyrics(title string, artist string, album string, duration int64) (str
 		return "", err
 	}
 
-	var response any
-	err = json.Unmarshal(body, &response)
-	if err != nil {
-		return "", err
-	}
-	responseMap := response.(map[string]any)
-
 	// Check for rate limiting
 	if resp.StatusCode == 429 {
 		for k, v := range resp.Header {
@@ -251,7 +244,16 @@ func fetchLyrics(title string, artist string, album string, duration int64) (str
 				}
 			}
 		}
-	} else if resp.StatusCode > 299 || resp.StatusCode < 200 {
+	}
+
+	var response any
+	err = json.Unmarshal(body, &response)
+	if err != nil {
+		return "", err
+	}
+	responseMap := response.(map[string]any)
+
+	if resp.StatusCode > 299 || resp.StatusCode < 200 {
 		return "", &FailedToFetchLyricsError{
 			title,
 			resp.StatusCode,
