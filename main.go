@@ -220,7 +220,7 @@ func fetchLyrics(title string, artist string, album string, duration int64) (str
 		return "", err
 	}
 
-	req.Header.Set("User-Agent", "addlyrics v0.0. (github.com/BradPatras/addlyrics)")
+	req.Header.Set("User-Agent", "addlyrics (github.com/BradPatras/addlyrics)")
 	req.Header.Set("Lrclib-App-Id", "66c57ghPecVYAiiFvDkgs3XdMcQAUr-lonnExKLSt2Q")
 
 	resp, err := client.Do(req)
