@@ -105,7 +105,7 @@ func addLyricsForPaths(paths []string) {
 			lyricsAddedCount += 1
 			fmt.Println(accentStyle.Render(ind("✔ Lyrics added!", 1)))
 			// Go easy on the free lyrics api
-			time.Sleep(100 * time.Millisecond)
+			time.Sleep(300 * time.Millisecond)
 		}
 	}
 }
@@ -169,8 +169,12 @@ func fetchAndWriteLyricsToFile(fp string) error {
 		lyrics, err = fetchLyrics(title, artist, album, duration)
 		if err != nil {
 			if rateLimitErr, ok := errors.AsType[*ApiRateLimitError](err); ok {
-				fmt.Println(ind(rateLimitErr.Error(), 1))
+				fmt.Println(warningStyle.Render(ind(rateLimitErr.Error(), 1)))
 				time.Sleep(time.Duration(rateLimitErr.waitSeconds) * time.Second)
+				shouldRetry = true
+			} else if serverOverloadErr, ok := errors.AsType[*ServerOverloadedError](err); ok {
+				fmt.Println(warningStyle.Render(ind(serverOverloadErr.Error(), 1)))
+				time.Sleep(time.Duration(serverOverloadErr.waitSeconds) * time.Second)
 				shouldRetry = true
 			} else {
 				return err
@@ -214,7 +218,6 @@ func writeLyricsToFile(lyrics string, inputfp string, outputfp string) error {
 func fetchLyrics(title string, artist string, album string, duration int64) (string, error) {
 	endpoint := fmt.Sprintf("https://lrclib.net/api/get?track_name=%s&artist_name=%s&album_name=%s&duration=%d", url.QueryEscape(title), url.QueryEscape(artist), url.QueryEscape(album), duration)
 	client := &http.Client{}
-
 	req, err := http.NewRequest("GET", endpoint, nil)
 	if err != nil {
 		return "", err
@@ -234,14 +237,19 @@ func fetchLyrics(title string, artist string, album string, duration int64) (str
 		return "", err
 	}
 
-	// Check for rate limiting
-	if resp.StatusCode == 429 {
-		for k, v := range resp.Header {
-			if k == "Retry-After" && len(v) > 0 {
-				waitTime, err := strconv.Atoi(v[0])
-				if err == nil {
-					return "", &ApiRateLimitError{waitTime}
+	// Check for rate limiting or busy server
+	if resp.StatusCode == 429 || resp.StatusCode == 503 {
+		waitTimeString := resp.Header.Get("retry-after")
+		if len(waitTimeString) > 0 {
+			waitTime, err := strconv.Atoi(waitTimeString)
+			if err == nil {
+				var e error
+				if resp.StatusCode == 429 {
+					e = &ApiRateLimitError{waitTime}
+				} else {
+					e = &ServerOverloadedError{waitTime}
 				}
+				return "", e
 			}
 		}
 	}

@@ -33,7 +33,7 @@ type ExistingLyricsTagError struct {
 }
 
 func (e *ExistingLyricsTagError) Error() string {
-	return fmt.Sprint("✔ Skipping: Lyrics already present")
+	return fmt.Sprint("🠟 Skipping: Lyrics already present")
 }
 
 type FailedToFetchLyricsError struct {
@@ -50,7 +50,7 @@ func (e *FailedToFetchLyricsError) Error() string {
 type InstrumentalError struct{}
 
 func (e *InstrumentalError) Error() string {
-	return fmt.Sprint("✔ Skipping: Instrumental")
+	return fmt.Sprint("🠟 Skipping: Instrumental")
 }
 
 type ApiRateLimitError struct {
@@ -58,7 +58,15 @@ type ApiRateLimitError struct {
 }
 
 func (e *ApiRateLimitError) Error() string {
-	return fmt.Sprintf("! API rate limit tripped, waiting %d seconds", e.waitSeconds)
+	return fmt.Sprintf("⧗ API rate limit tripped, retrying in %d seconds", e.waitSeconds)
+}
+
+type ServerOverloadedError struct {
+	waitSeconds int
+}
+
+func (e *ServerOverloadedError) Error() string {
+	return fmt.Sprintf("⧗ Server overloaded, retrying in %d seconds", e.waitSeconds)
 }
 
 type ResponseMissingPlainLyricsError struct{}
