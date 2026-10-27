@@ -42,7 +42,9 @@ addlyrics -h
 
 # an example usage would be:
 addlyrics -t ~/Music/Muse/
-# running this will search the `Muse/` directory (and it's sub-directories) for mp3s, fetch lyrics for all found, and apply the lyric data to the files.
+# running this will search the `Muse/` directory
+# (and it's sub-directories) for mp3s, fetch lyrics for
+# all found, and apply the lyric data to the files.
 ```
 
 ### Limited scope
